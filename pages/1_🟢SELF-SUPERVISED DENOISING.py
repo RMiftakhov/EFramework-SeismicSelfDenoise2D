@@ -11,7 +11,7 @@ from visualization_helpers import VISUALIZATION
 from torch.utils.data import TensorDataset, DataLoader 
 from appdata.Transform2022_SelfSupervisedDenoising.unet import UNet
 from appdata.Transform2022_SelfSupervisedDenoising.tutorial_utils import regular_patching_2D, add_whitegaussian_noise, add_bandlimited_noise, weights_init, set_seed, make_data_loader,plot_corruption, plot_training_metrics, plot_synth_results, plot_field_results, multi_active_pixels, n2v_train, n2v_evaluate
-
+import time
 import plotly.graph_objects as go
 
 
@@ -107,19 +107,24 @@ def train_model(noisy_patches, lr, n_epochs, n_training, n_test, batch_size, num
     g = torch.Generator()
     g.manual_seed(0)
 
-    
-    
-
     my_bar = st.progress(0)
     placeholder = st.empty()
+    t_start = 0
     # TRAINING
     for ep in range(n_epochs): 
         with placeholder.container():
             col1, col2, col3 = st.columns(3)
             col1.metric(label="Epoch out of {}".format(n_epochs), value=ep)
-            col2.metric(label="Training Loss", value=train_loss_history[ep], delta=(train_loss_history[ep]-train_loss_history[ep-1] if ep>0 else train_loss_history[ep]), delta_color="inverse")
-            col3.metric(label="Test Loss", value=test_loss_history[ep], delta=(test_loss_history[ep]-test_loss_history[ep-1] if ep>0 else test_loss_history[ep]), delta_color="inverse")
+            col2.metric(label="Estimate wait time", value= "--" if t_start == 0 else time.strftime('%H:%M:%S',time.gmtime(((t_end - t_start)*(n_epochs-ep)))))
+            col3.metric(label="Seconds to predict 1 epoch", value= "--" if t_start == 0 else str(round((t_end - t_start), 2)))            
+            fig,axs = plot_training_metrics(train_accuracy_history,
+                        test_accuracy_history,
+                        train_loss_history,
+                        test_loss_history
+                    )
+            st.write(fig)
         my_bar.progress(ep/n_epochs)
+        t_start = time.time()
         # RANDOMLY CORRUPT THE NOISY PATCHES
         corrupted_patches = np.zeros_like(noisy_patches)
         masks = np.zeros_like(corrupted_patches)
@@ -145,7 +150,7 @@ def train_model(noisy_patches, lr, n_epochs, n_training, n_test, batch_size, num
         Training Loss {train_loss:.4f},     Training Accuracy {train_accuracy:.4f}, 
         Test Loss {test_loss:.4f},     Test Accuracy {test_accuracy:.4f} ''')
         placeholder.empty()
-        
+        t_end = time.time()
         
     torch.save(network, weights_path+weights_name)
     return train_accuracy_history, test_accuracy_history, train_loss_history, test_loss_history 
@@ -234,8 +239,9 @@ if st.session_state.patching_submit:
         fig, axs = plt.subplots(3,6,figsize=[15,7])
         for i in range(6*3):
             vm = np.percentile(st.session_state.noisy_patches[i], 95)
-            axs.ravel()[i].imshow(st.session_state.noisy_patches[i], cmap='binary', vmin=-vm, vmax=vm)
+            axs.ravel()[i].imshow(st.session_state.noisy_patches[i], cmap='RdBu', vmin=-vm, vmax=vm)
         fig.tight_layout()
+        st.write(f"Extracting {len(st.session_state.noisy_patches)} patches")
         st.write(fig)
 
 
@@ -280,6 +286,7 @@ print('3_end')
 
 
 network_exp = st.expander("🔴 Step 4 - Here you set up and train the network OR load a saved model")
+weights_path_name = " "
 step4_option = network_exp.radio(
     "Do you want to train the network from scratch or use an already trained model?",
     ('Go Training', 'Use Trained Model'))
@@ -311,6 +318,7 @@ if step4_option == 'Go Training':
     col111, col222 = network_form.columns(2)
     st.session_state.weights_path = col111.text_input('Path to save the model with slash at end, for example /Users/ruslan/Documents/GitHub/')
     st.session_state.weights_name = col222.text_input('Name of the model, for example SyntheticModel.pt')
+    weights_path_name = st.session_state.weights_path+st.session_state.weights_name
     network_submit = col111.form_submit_button("Submit")
 
     if network_submit:
@@ -335,13 +343,15 @@ if step4_option == 'Go Training':
                                         test_loss_history
                                     )
         st.write(fig)
+        st.session_state[module_name]['step4_status'] = True
 else: 
 
     weights_path_name = network_exp.text_input('Please pass here the whole path to the file', st.session_state.weights_path+st.session_state.weights_name)
     network_exp.write('The selected file is: {}'.format(weights_path_name))
+    st.session_state[module_name]['step4_status'] = True
 
-    if weights_path_name:
-        network = torch.load(weights_path_name)
+if st.session_state[module_name]['step4_status']:
+    network = torch.load(weights_path_name)
 
 
 apply_exp = st.expander("🔴 Step 5 - Now is the time to APPLY the trained model")
@@ -358,11 +368,11 @@ if st.session_state[module_name]['step5_status']:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("### Noisy Data")
-        viz.viz_data_2d(noisydata, is_fspect=False, is_show_metrics=False)
+        #viz.viz_data_2d(noisydata, is_fspect=False, is_show_metrics=False)
     with col2:
         st.markdown("### Data after Cleaning")
-        viz.viz_data_2d(st.session_state[module_name]['numpy_result'], is_fspect=False, is_show_metrics=False)
-            
+        #viz.viz_data_2d(st.session_state[module_name]['numpy_result'], is_fspect=False, is_show_metrics=False)
+    viz.viz_sidebyside_2d(noisydata, st.session_state[module_name]['numpy_result'],key=150, is_fspect=False, is_show_metrics=True)   
     if st.session_state[module_name]['noise_applied'] not in st.session_state:
         viz.plot_fspectra_2(seismic.get_iline(), "Original", data2=st.session_state[module_name]['numpy_result'], data2_name="Clean")
     else:
