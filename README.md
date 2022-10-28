@@ -4,7 +4,7 @@ Add-on for [**EFramework**](https://github.com/RMiftakhov/EFramework) -  democra
 
 This repo is an adaptation of the 2D Self Supervised Seismic Denoising by [Claire](https://cebirnie92.github.io/) (Links: [Paper](https://arxiv.org/abs/2109.07344), [GitHub](https://github.com/swag-kaust/Transform2022_SelfSupervisedDenoising))
 
-## Step1 - EFramework Installation
+## Step 1 - EFramework Installation
 1. Clone the repo `git clone https://github.com/RMiftakhov/EFramework`
 2. Lauch a terminal in the EFramework folder
 3. Create a new conda enviroment `conda env create -f environment.yml`
