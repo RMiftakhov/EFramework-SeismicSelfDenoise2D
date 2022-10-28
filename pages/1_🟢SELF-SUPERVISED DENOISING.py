@@ -157,7 +157,8 @@ def train_model(noisy_patches, lr, n_epochs, n_training, n_test, batch_size, num
 
 st.markdown("# 🧹2D Self Supervised Denoising by [Claire](https://cebirnie92.github.io/) (Links: [Paper](https://arxiv.org/abs/2109.07344), [GitHub](https://github.com/swag-kaust/Transform2022_SelfSupervisedDenoising))")
 
-with st.expander("Abstract - The potential of self-supervised networks for random noise suppression in seismic data"):
+with st.expander("Abstract"):
+    st.subheader("The potential of self-supervised networks for random noise suppression in seismic data")
     st.write("""Noise suppression is an essential step in any seismic processing workflow. A portion of this noise, particularly in land datasets, presents itself as random noise. In recent years, neural networks have been successfully used to denoise seismic data in a supervised fashion. However, supervised learning always comes with the often unachievable requirement of having noisy-clean data pairs for training. Using blind-spot networks, we redefine the denoising task as a self-supervised procedure where the network uses the surrounding noisy samples to estimate the noise-free value of a central sample. Based on the assumption that noise is statistically independent between samples, the network struggles to predict the noise component of the sample due to its randomnicity, whilst the signal component is accurately predicted due to its spatio-temporal coherency. Illustrated on synthetic examples, the blind-spot network is shown to be an efficient denoiser of seismic data contaminated by random noise with minimal damage to the signal; therefore, providing improvements in both the image domain and down-the-line tasks, such as inversion. To conclude the study, the suggested approach is applied to field data and the results are compared with two commonly used random denoising techniques: FX-deconvolution and Curvelet transform. By demonstrating that blind-spot networks are an efficient suppressor of random noise, we believe this is just the beginning of utilising self-supervised learning in seismic applications.""")
 col1, col2 = st.columns(2)
 with col1: 
@@ -170,16 +171,19 @@ with col2:
 st.markdown("## ✨ Here we go with the APP")
 
 if "seismic" not in st.session_state or st.session_state.seismic_type=="3D":
-        st.error("Please import 2D seismic first")
-        st.stop()
+    st.error("Please import 2D seismic first")
+    st.stop()
 
 module_name = "SelfDenoise2D"
 
 st.write(st.session_state.filename)
 seismic = st.session_state.seismic
 seismic_type = st.session_state.seismic_type
+
+# the network requites to have as input the size that is multiple of 4
 seismic.make_axis_devisable_by(4)
 
+# bunch of states that we need to keep track
 if module_name not in st.session_state:
     st.session_state[module_name] = {"numpy_data" : None, "noise_applied": None, \
         "numpy_result" : None, "is_predicted" : False, 'cropped_info' : None, \
@@ -188,7 +192,6 @@ if module_name not in st.session_state:
 
 viz = VISUALIZATION(seismic, seismic_type)
 viz.viz_data_2d(seismic.get_iline(), is_fspect=True)
-
 
 noise_exp = st.expander("🟢 Step 1 - Here you add noise to noise-free data [⚠️ Feel free to skip it unless you are working with clean seismic]")
 noises_seq = ['None', 'White Gaussian Noise', 'Bandlimited Noise']
@@ -206,10 +209,10 @@ if noise_option != "None":
 
 
 
-patch_exp = st.expander("🟡 Step 2 - Here you slice the noisy data into patches")
-patch_exp.info(""" We just have one image to denoise, but in order to train the network, we'll need to provide it with more. Because of this, we will follow standard computer vision practice and pick random patches from the data to train the networks.
+patch_exp = st.expander("🔴 Step 2 - Here you slice the seismic data into patches")
+patch_exp.info(""" We just have one image to denoise (2d seismic slice), but in order to train the network, we'll need to provide it with more. We will follow standard computer vision practice and crop random patches from the seismic to train the networks.
 
-To implement patches, we first properly extract them from the image at regular intervals and then rearrange them so that they appear in a random sequence. These patches will be divided into train and test datasets throughout the training phase.
+We first extract them from the seismic at regular intervals and then rearrange them so that they appear in a random sequence. These patches will be divided into train and test datasets throughout the training phase.
 
 Patch size in pixels along X and Y axis. Default is 32pix by 32pix. """)
 patch_form = patch_exp.form("Extract Patches")
@@ -249,9 +252,9 @@ if st.session_state.patching_submit:
 print('2_end')
 
 
-blindspot_exp = st.expander("🟡 Step 3 - Here you further corrupt the training data with Blindspot")
+blindspot_exp = st.expander("🔴 Step 3 - Here you further corrupt the training data with Blindspot tech.")
 blindspot_exp.info("""
-Blindspot corruption operates on patches of a single image, swapping out some of the pixels in each patch with pixels from the surrounding areas [Neighbourhood Radius]. 
+Blindspot corruption operates on patches, swapping out some of the pixels in each patch with pixels from the surrounding areas [Neighbourhood Radius]. 
 
 This could be 1 just one pixel corruption,or a percentage of the total number of pixels in the image [Percent of Pixels to Corrupt]. 
 
@@ -293,7 +296,7 @@ step4_option = network_exp.radio(
 if step4_option == 'Go Training':
     network_form = network_exp.form("network")
     network_form.info("""
-    The corrupted patches ☝️ are then fed into a neural network (UNet architecture), while the original patches are used to represent the target values. The network  attempts to recover the value of a corrupted pixel by analyzing the whole image.
+    The corrupted patches ☝️ are then fed into a neural network (UNet architecture), while the original patches are used for testing. The network  attempts to recover the value of a corrupted pixel by analyzing the whole image.
 
     Feel free to experiment with the parameters to attain the best performance on your dataset. The parameters are left as they were in Claire's solution.
 
@@ -354,8 +357,8 @@ if st.session_state[module_name]['step4_status']:
     network = torch.load(weights_path_name)
 
 
-apply_exp = st.expander("🔴 Step 5 - Now is the time to APPLY the trained model")
-apply_exp.info("The noisy image does not need any data patching or active pixel pre-processing for the normal network application. That is to say, the network may be given the noisy image for denoising without any intermediate steps.")
+apply_exp = st.expander("🔴 Step 5 - Now is the time to APPLY the trained denoising to the original seismic data")
+apply_exp.info("The noisy image does not need any data patching or active pixel pre-processing. That is to say, the network may be given the noisy image for denoising without any intermediate steps.")
 apply_form = apply_exp.form("apply")
 apply_submit = apply_form.form_submit_button("Submit")
 
